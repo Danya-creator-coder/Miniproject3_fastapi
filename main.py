@@ -4,6 +4,8 @@ import uvicorn
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import RedirectResponse
+
 import models
 import schemas
 import crud
@@ -11,12 +13,44 @@ import auth
 from database import engine, get_db
 import aiosqlite
 import python_multipart
+import base64
+import secrets
+
+from schemas import Token
 
 app = FastAPI()
 
 
 
 templates = Jinja2Templates(directory="templates")
+
+
+
+@app.middleware("http")
+async def token_middleware(request: Request, call_next):
+    if request.url.path != "/register":
+        token = request.headers.get("token")
+        if not token:
+            return RedirectResponse(url="/register", status_code=307)
+    response = await call_next(request)
+    return response
+
+
+async def decode_token(token: str):
+    """
+    Декодування токену доступу отриманого з заголовку Authorization.
+    Приклад: Authorization: Bearer am9obi5kb2VAZXhhbXBsZS5jb20tSm9obiBEb2U=
+    """
+    try:
+        # дістаємо з закодованого токену email користувача
+        # email-name.split("-")[0] --> email
+        decoded_user_email = (
+            base64.urlsafe_b64decode(token).split(b"-")[0].decode("utf-8")
+        )
+    except (UnicodeDecodeError, ValueError):
+        return None
+
+    return decoded_user_email
 
 
 @app.get("/")
@@ -54,17 +88,29 @@ async def register(user: schemas.UserCreate, db: AsyncSession = Depends(get_db))
     created_user = await crud.create_user(db, user.email, user.name, user.password)
     return created_user
 
-@app.post("/token")
+@app.post("/token", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     user = await auth.authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(status_code=400, detail="Невірні облікові дані")
 
-    return {"access_token": user.email, "token_type": "bearer"}
+    return Token(
+        access_token=base64.urlsafe_b64encode(
+            f"{user.email}-{user.name}".encode("utf-8")
+        ).decode("utf-8"),
+        token_type="bearer",
+    )
+
 
 @app.get("/users/me", response_model=schemas.UserRead)
 async def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
     return current_user
+
+
+@app.get("/register")
+async def register_page(request:Request):
+    return templates.TemplateResponse("register.html", {"request": request})
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", port=8002, reload=True)

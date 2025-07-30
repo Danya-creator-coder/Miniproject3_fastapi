@@ -21,5 +21,10 @@ class UserRead(BaseModel):
     email: EmailStr
     name: str
 
+class Token(BaseModel):
+
+    token_type: str
+    access_token: str
+
     class Config:
         from_attributes = True
