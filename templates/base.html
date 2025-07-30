@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Used Market{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans">
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-indigo-600 to-blue-600 text-white p-5 shadow-md">
+        <div class="container mx-auto">
+            <h1 class="text-3xl font-bold text-center">Used Market</h1>
+            <p class="text-center text-sm mt-1">Купівля та продаж Б/У речей</p>
+        </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="bg-white border-b shadow-sm sticky top-0 z-50">
+        <div class="container mx-auto flex justify-center space-x-8 py-3">
+            <a href="/" class="text-gray-700 hover:text-blue-600 font-medium">Головна</a>
+            <a href="/add" class="text-gray-700 hover:text-blue-600 font-medium">Додати товар</a>
+            <a href="/chat" class="text-gray-700 hover:text-blue-600 font-medium">Чат</a>
+        </div>
+    </nav>
+
+    <!-- Page Content -->
+    <main class="container mx-auto px-4 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-200 text-center py-4 mt-10 text-sm text-gray-600">
+        &copy; 2025 Used Market. Усі права захищені.
+    </footer>
+</body>
+</html>
