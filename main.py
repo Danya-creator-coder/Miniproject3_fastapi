@@ -1,10 +1,10 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Form
 from fastapi.templating import Jinja2Templates
 import uvicorn
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.responses import RedirectResponse
+from starlette.responses import RedirectResponse, JSONResponse
 
 import models
 import schemas
@@ -28,12 +28,19 @@ templates = Jinja2Templates(directory="templates")
 
 @app.middleware("http")
 async def token_middleware(request: Request, call_next):
-    if request.url.path != "/register":
-        token = request.headers.get("token")
+    # Пропускаем регистрацию и аутентификацию
+    if request.url.path not in ["/register", "/login"]:
+        token = request.cookies.get("token")  # <-- читаем токен из cookie
         if not token:
             return RedirectResponse(url="/register", status_code=307)
+        user_email = await decode_token(token)
+        if user_email is None:
+            return RedirectResponse(url="/register", status_code=307)
+        request.state.user_email = user_email
+
     response = await call_next(request)
     return response
+
 
 
 async def decode_token(token: str):
@@ -80,13 +87,31 @@ async def on_startup():
     async with engine.begin() as conn:
         await conn.run_sync(models.Base.metadata.create_all)
 
-@app.post("/register", response_model=schemas.UserRead, status_code=status.HTTP_201_CREATED)
-async def register(user: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
-    db_user = await crud.get_user_by_email(db, user.email)
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email вже зареєстрований")
-    created_user = await crud.create_user(db, user.email, user.name, user.password)
-    return created_user
+@app.post("/register")
+async def register_user(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    name: str = Form(...),
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        user = await crud.get_user_by_email(db, email=email)
+        if user:
+            return templates.TemplateResponse(
+                "register.html",
+                {"request": request, "error": "User already exists"}
+            )
+        await crud.create_user(db, email=email, password=password, name=name)  # передаем name
+
+        token = base64.urlsafe_b64encode(email.encode()).decode()
+
+        response = RedirectResponse(url="/", status_code=303)
+        response.set_cookie(key="token", value=token, httponly=True)
+        return response
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.post("/token", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
